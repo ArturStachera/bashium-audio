@@ -1,7 +1,5 @@
 # BASHIUM
 
-![](https://github.com/ArturStachera/bashium/releases/download/v1.0.1/Screenshot_2026-01-23.png)
-
 **BASHIUM** is a GUI-driven toolkit for turning a stock Debian installation into a fully configured audio production workstation — similar in spirit to Ubuntu Studio, but built on pure Debian.
 
 It uses `customtkinter` to provide a clean, modern interface for running system configuration scripts, installing audio software, tuning the kernel for low-latency work, and setting up the complete PipeWire/JACK stack.
@@ -87,8 +85,8 @@ Python packages are listed in `requirements.txt` (currently: `customtkinter`).
 ### Quick start
 
 ```bash
-git clone https://github.com/ArturStachera/bashium.git
-cd bashium
+git clone https://github.com/ArturStachera/bashium-audio.git
+cd bashium-audio
 chmod +x bashium.sh
 ./bashium.sh
 ```
