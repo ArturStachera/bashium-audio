@@ -4,7 +4,7 @@ set -e
 
 # ----------------------------------------------------------
 # BASHIUM AUDIO - WINE + YABRIDGE INSTALLER
-# Debian / Ubuntu compatible
+# Debian testing / Forky compatible
 # ----------------------------------------------------------
 
 clear
@@ -36,42 +36,10 @@ VST3_DIR="$WINEPREFIX/drive_c/Program Files/Common Files/VST3"
 # HELPERS
 # ----------------------------------------------------------
 
-info() {
-    echo -e "\e[1;34m[INFO]\e[0m $1"
-}
-
-success() {
-    echo -e "\e[1;32m[SUCCESS]\e[0m $1"
-}
-
-warn() {
-    echo -e "\e[1;33m[WARNING]\e[0m $1"
-}
-
-error() {
-    echo -e "\e[1;31m[ERROR]\e[0m $1"
-}
-
-# ----------------------------------------------------------
-# PACKAGE INSTALLER
-# ----------------------------------------------------------
-
-install_if_exists() {
-
-    PACKAGE="$1"
-
-    if apt-cache show "$PACKAGE" &>/dev/null; then
-
-        info "Installing package: $PACKAGE"
-
-        sudo apt install -y "$PACKAGE"
-
-    else
-
-        warn "Skipping missing package: $PACKAGE"
-
-    fi
-}
+info() { echo -e "\e[1;34m[INFO]\e[0m $1"; }
+success() { echo -e "\e[1;32m[SUCCESS]\e[0m $1"; }
+warn() { echo -e "\e[1;33m[WARNING]\e[0m $1"; }
+error() { echo -e "\e[1;31m[ERROR]\e[0m $1"; }
 
 # ----------------------------------------------------------
 # INTERNET CHECK
@@ -91,7 +59,6 @@ success "Internet connection OK"
 # ----------------------------------------------------------
 
 info "Enabling i386 architecture..."
-
 sudo dpkg --add-architecture i386 2>/dev/null || true
 
 # ----------------------------------------------------------
@@ -99,36 +66,58 @@ sudo dpkg --add-architecture i386 2>/dev/null || true
 # ----------------------------------------------------------
 
 info "Updating package lists..."
-
 sudo apt update
 
 # ----------------------------------------------------------
-# INSTALL REQUIRED PACKAGES
+# INSTALL WINE FROM DEBIAN REPOS
+# Debian testing/Forky carries a recent wine build.
+# winehq repos do not support testing — do not add them.
+# ----------------------------------------------------------
+
+info "Installing wine..."
+
+for pkg in wine wine64 "wine32:i386"; do
+    if ! dpkg -l "${pkg%%:*}" 2>/dev/null | grep -q "^ii"; then
+        sudo apt install -y "$pkg" 2>/dev/null || \
+            warn "Could not install $pkg (may be pulled as dependency)"
+    fi
+done
+
+if ! command -v wine &>/dev/null; then
+    error "Wine was not installed correctly."
+    exit 1
+fi
+
+WINE_VERSION=$(wine --version)
+success "Wine installed: $WINE_VERSION"
+
+# ----------------------------------------------------------
+# INSTALL DEPENDENCIES
 # ----------------------------------------------------------
 
 info "Installing dependencies..."
 
-install_if_exists wine
-install_if_exists winetricks
-install_if_exists curl
-install_if_exists wget
-install_if_exists cabextract
-install_if_exists unzip
-install_if_exists p7zip-full
-install_if_exists zenity
+for pkg in curl wget cabextract unzip p7zip-full zenity; do
+    if ! dpkg -l "$pkg" 2>/dev/null | grep -q "^ii"; then
+        sudo apt install -y "$pkg" || warn "Could not install: $pkg"
+    fi
+done
 
 # ----------------------------------------------------------
-# CHECK WINE
+# INSTALL WINETRICKS STANDALONE
+# The Debian winetricks package depends on the Debian wine
+# package by name, causing conflicts. The standalone script
+# has no such dependency and is always up to date.
 # ----------------------------------------------------------
 
-if ! command -v wine &>/dev/null; then
+info "Installing winetricks (standalone from GitHub)..."
 
-    error "Wine was not installed correctly."
-    exit 1
+sudo wget -q -O /usr/local/bin/winetricks \
+    https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks
 
-fi
+sudo chmod +x /usr/local/bin/winetricks
 
-success "Wine installed"
+success "winetricks installed"
 
 # ----------------------------------------------------------
 # CREATE WINE PREFIX
@@ -137,8 +126,7 @@ success "Wine installed"
 info "Creating Wine audio prefix..."
 
 mkdir -p "$WINEPREFIX"
-
-winecfg > /dev/null 2>&1 || true
+WINEDEBUG="-all" winecfg > /dev/null 2>&1 || true
 
 success "Wine prefix initialized"
 
@@ -151,21 +139,13 @@ read -rp "Install common VST runtime libraries? [Y/n]: " INSTALL_RUNTIME
 
 if [[ "$INSTALL_RUNTIME" =~ ^[Yy]$|^$ ]]; then
 
-    if command -v winetricks &>/dev/null; then
+    info "Installing Visual C++ runtime..."
 
-        info "Installing Visual C++ runtime..."
+    WINEPREFIX="$WINEPREFIX" winetricks -q corefonts vcrun2019 || {
+        warn "Winetricks runtime installation failed."
+    }
 
-        winetricks -q corefonts vcrun2019 || {
-            warn "Winetricks runtime installation failed."
-        }
-
-        success "Runtime libraries installed"
-
-    else
-
-        warn "Winetricks not available."
-
-    fi
+    success "Runtime libraries installed"
 
 fi
 
@@ -177,7 +157,6 @@ info "Creating VST directories..."
 
 mkdir -p "$VST2_DIR"
 mkdir -p "$VST3_DIR"
-
 mkdir -p "$HOME/.vst"
 mkdir -p "$HOME/.vst3"
 
@@ -193,64 +172,99 @@ mkdir -p "$YABRIDGE_DIR"
 mkdir -p "$BIN_DIR"
 
 TEMP_DIR=$(mktemp -d)
-
 cd "$TEMP_DIR"
 
 DOWNLOAD_URL=$(curl -s \
-https://api.github.com/repos/robbert-vdh/yabridge/releases/latest \
-| grep browser_download_url \
-| grep 'yabridge-.*\.tar\.gz' \
-| cut -d '"' -f 4 \
-| head -n 1)
+    https://api.github.com/repos/robbert-vdh/yabridge/releases/latest \
+    | grep browser_download_url \
+    | grep 'yabridge-.*\.tar\.gz' \
+    | cut -d '"' -f 4 \
+    | head -n 1)
 
 if [ -z "$DOWNLOAD_URL" ]; then
-
     error "Could not find yabridge release."
     exit 1
-
 fi
 
 info "Downloading yabridge..."
-
 curl -L "$DOWNLOAD_URL" -o yabridge.tar.gz
 
 info "Extracting yabridge..."
-
 tar -xzf yabridge.tar.gz
 
 EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "yabridge*" | head -n 1)
 
 if [ -z "$EXTRACTED_DIR" ]; then
-
     error "Could not extract yabridge."
     exit 1
-
 fi
 
 cp -r "$EXTRACTED_DIR"/* "$YABRIDGE_DIR/"
-
-ln -sf "$YABRIDGE_DIR/yabridge" "$BIN_DIR/yabridge"
 ln -sf "$YABRIDGE_DIR/yabridgectl" "$BIN_DIR/yabridgectl"
 
 success "yabridge installed"
 
 # ----------------------------------------------------------
-# PATH
+# PATH + ENVIRONMENT
 # ----------------------------------------------------------
 
 if ! grep -q '.local/bin' "$HOME/.bashrc"; then
-
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-
 fi
 
 if ! grep -q 'WINEPREFIX' "$HOME/.bashrc"; then
-
     echo 'export WINEPREFIX="$HOME/wine-audio"' >> "$HOME/.bashrc"
+fi
 
+if ! grep -q 'WINEARCH' "$HOME/.bashrc"; then
+    echo 'export WINEARCH="win64"' >> "$HOME/.bashrc"
 fi
 
 export PATH="$HOME/.local/bin:$PATH"
+
+# ----------------------------------------------------------
+# PW-JACK WRAPPER SCRIPTS
+# Wrapper scripts work in terminal AND desktop menu launchers.
+# Aliases (.bashrc) only work in terminal — ignored by menus.
+# ----------------------------------------------------------
+
+info "Creating pw-jack wrapper scripts..."
+
+JACK_APPS="meterbridge carla jack_mixer non-mixer japa jnoise ardour"
+
+for app in $JACK_APPS; do
+
+    WRAPPER="$BIN_DIR/$app"
+
+    # Skip if wrapper already exists with pw-jack
+    if [ -f "$WRAPPER" ] && grep -q "pw-jack" "$WRAPPER" 2>/dev/null; then
+        continue
+    fi
+
+    REAL_BIN=$(command -v "$app" 2>/dev/null || true)
+
+    if [ -n "$REAL_BIN" ] && [ "$REAL_BIN" != "$WRAPPER" ]; then
+        cat > "$WRAPPER" <<WRAPPER_EOF
+#!/bin/bash
+exec pw-jack $REAL_BIN "\$@"
+WRAPPER_EOF
+    else
+        cat > "$WRAPPER" <<WRAPPER_EOF
+#!/bin/bash
+REAL_BIN=\$(command -v "$app" 2>/dev/null || true)
+if [ -z "\$REAL_BIN" ] || [ "\$REAL_BIN" = "$BIN_DIR/$app" ]; then
+    echo "Error: $app is not installed." >&2
+    exit 1
+fi
+exec pw-jack "\$REAL_BIN" "\$@"
+WRAPPER_EOF
+    fi
+
+    chmod +x "$WRAPPER"
+
+done
+
+success "pw-jack wrapper scripts created"
 
 # ----------------------------------------------------------
 # CONFIGURE YABRIDGE
@@ -281,8 +295,9 @@ cat <<EOF
 |                    INSTALL COMPLETE                      |
 +----------------------------------------------------------+
 
-Wine Prefix:
-  $WINEPREFIX
+Wine:          $(wine --version 2>/dev/null || echo "installed")
+Wine Prefix:   $WINEPREFIX
+Architecture:  $WINEARCH
 
 VST2 Directory:
   $VST2_DIR
@@ -291,46 +306,51 @@ VST3 Directory:
   $VST3_DIR
 
 ============================================================
-HOW TO INSTALL WINDOWS VST PLUGINS
+FIRST STEPS
 ============================================================
 
-1. Reload your shell config (once, after install):
+1. Reload shell environment:
 
    source ~/.bashrc
 
-2. Run plugin installer:
+2. Install a Windows VST plugin:
 
    wine setup.exe
 
-3. Install plugins to:
+   Install to:
+     VST2:  C:\\VSTPlugins
+     VST3:  C:\\Program Files\\Common Files\\VST3
 
-   VST2:
-   C:\\VSTPlugins
-
-   VST3:
-   C:\\Program Files\\Common Files\\VST3
-
-4. Sync yabridge:
+3. Sync yabridge after each new plugin install:
 
    yabridgectl sync
 
-5. Open your DAW and scan:
+4. Scan in your DAW:
 
    ~/.vst
    ~/.vst3
 
 ============================================================
+JACK APPLICATIONS
+============================================================
+
+pw-jack wrapper scripts created for:
+  $JACK_APPS
+
+These wrap JACK apps to use PipeWire's JACK layer.
+Works in terminal and desktop menu launchers.
+
+To add wrappers for new JACK apps, run this script again.
+
+============================================================
 USEFUL COMMANDS
 ============================================================
 
-List plugins:
-   yabridgectl list
-
-Force resync:
-   yabridgectl sync --force
-
-Remove broken plugins:
-   yabridgectl prune
+List plugins:       yabridgectl list
+Force resync:       yabridgectl sync --force
+Remove broken:      yabridgectl prune
+Wine config:        winecfg
+Install runtime:    winetricks vcrun2019
 
 ============================================================
 SUPPORTED DAWs
