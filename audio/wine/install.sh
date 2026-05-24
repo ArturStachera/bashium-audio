@@ -244,6 +244,12 @@ if ! grep -q '.local/bin' "$HOME/.bashrc"; then
 
 fi
 
+if ! grep -q 'WINEPREFIX' "$HOME/.bashrc"; then
+
+    echo 'export WINEPREFIX="$HOME/wine-audio"' >> "$HOME/.bashrc"
+
+fi
+
 export PATH="$HOME/.local/bin:$PATH"
 
 # ----------------------------------------------------------
@@ -288,11 +294,15 @@ VST3 Directory:
 HOW TO INSTALL WINDOWS VST PLUGINS
 ============================================================
 
-1. Run plugin installer:
+1. Reload your shell config (once, after install):
+
+   source ~/.bashrc
+
+2. Run plugin installer:
 
    wine setup.exe
 
-2. Install plugins to:
+3. Install plugins to:
 
    VST2:
    C:\\VSTPlugins
@@ -300,11 +310,11 @@ HOW TO INSTALL WINDOWS VST PLUGINS
    VST3:
    C:\\Program Files\\Common Files\\VST3
 
-3. Sync yabridge:
+4. Sync yabridge:
 
    yabridgectl sync
 
-4. Open your DAW and scan:
+5. Open your DAW and scan:
 
    ~/.vst
    ~/.vst3
