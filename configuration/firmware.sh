@@ -67,14 +67,18 @@ detect_wifi_vendors(){
     local filtered_hw
     filtered_hw=$(echo "$hw" | grep -Eiv 'Ethernet|Gigabit|10-Gigabit|1000Base')
 
-    if echo "$filtered_hw" | grep -Eqi 'Network controller.*Wireless|Network controller.*802\.11|Wireless|Wi-Fi|802\.11'; then
-        if echo "$filtered_hw" | grep -Eqi 'Intel|8086:'; then wifi_intel=true; fi
-        if echo "$filtered_hw" | grep -Eqi 'Broadcom|BCM|14e4:'; then wifi_broadcom=true; fi
-        if echo "$filtered_hw" | grep -Eqi 'Realtek|RTL|10ec:|0bda:'; then wifi_realtek=true; fi
-        if echo "$filtered_hw" | grep -Eqi 'Atheros|Qualcomm|168c:|0cf3:'; then wifi_atheros=true; fi
-        if echo "$filtered_hw" | grep -Eqi 'MediaTek|Mediatek|MTK|14c3:|0e8d:'; then wifi_mediatek=true; fi
-        if echo "$filtered_hw" | grep -Eqi 'Ralink|148f:'; then wifi_ralink=true; fi
-    fi
+    # Improved detection logic: check lines one by one to avoid cross-line matches
+    while IFS= read -r line; do
+        if [[ -z "$line" ]]; then continue; fi
+        if echo "$line" | grep -Eqi 'Wireless|Wi-Fi|WiFi|802\.11'; then
+            if echo "$line" | grep -Eqi 'Intel|8086:'; then wifi_intel=true; fi
+            if echo "$line" | grep -Eqi 'Broadcom|BCM|14e4:'; then wifi_broadcom=true; fi
+            if echo "$line" | grep -Eqi 'Realtek|RTL|10ec:|0bda:'; then wifi_realtek=true; fi
+            if echo "$line" | grep -Eqi 'Atheros|Qualcomm|168c:|0cf3:'; then wifi_atheros=true; fi
+            if echo "$line" | grep -Eqi 'MediaTek|Mediatek|MTK|14c3:|0e8d:'; then wifi_mediatek=true; fi
+            if echo "$line" | grep -Eqi 'Ralink|148f:'; then wifi_ralink=true; fi
+        fi
+    done <<< "$filtered_hw"
 }
 
 has_nvidia_gpu(){

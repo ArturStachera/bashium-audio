@@ -168,7 +168,7 @@ def detect_wifi_vendors() -> set[str]:
     ]
 
     for line in filtered_lines:
-        if any(x in line for x in ["wireless", "wi-fi", "802.11"]):
+        if any(x in line for x in ["wireless", "wi-fi", "wifi", "802.11"]):
             if any(x in line for x in ["intel", "8086:"]):
                 vendors.add("Intel")
             if any(x in line for x in ["broadcom", "bcm", "14e4:"]):
@@ -385,7 +385,7 @@ class ModuleCard(ctk.CTkFrame):
 
         # ── Header z ikoną i nazwą ────────────────────────────────────────
         header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        header_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(15, 5))
+        header_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 2))
 
         # Ikona modułu
         icon_text = MODULE_ICONS.get(module.name, "▶")
@@ -421,11 +421,11 @@ class ModuleCard(ctk.CTkFrame):
             text=module.description,
             font=ctk.CTkFont(size=12),
             text_color=colors["fg"],
-            anchor="w",
+            anchor="nw",
             justify="left",
-            wraplength=500,
+            wraplength=420,
         )
-        desc_label.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 15))
+        desc_label.grid(row=1, column=0, sticky="nsew", padx=20, pady=(2, 10))
 
         # ── Przycisk RUN ─────────────────────────────────────────────────
         self.run_button = ctk.CTkButton(
@@ -437,10 +437,10 @@ class ModuleCard(ctk.CTkFrame):
             hover_color=colors["accent_hover"],
             text_color="#000000" if module.enabled else "#404040",
             corner_radius=8,
-            height=40,
+            height=36,
             state="normal" if module.enabled else "disabled",
         )
-        self.run_button.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 15))
+        self.run_button.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 12))
 
         # Bind hover to card AND all children — prevents flicker when mouse
         # crosses into a child widget (tkinter fires Leave on parent otherwise)
@@ -573,126 +573,98 @@ class ModuleCard(ctk.CTkFrame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  AudioProductionWindow  —  okno z kategorystami audio
+#  AudioProductionPanel  —  panel boczny z kategoriami audio
 # ══════════════════════════════════════════════════════════════════════════════
 
-class AudioProductionWindow(ctk.CTkToplevel):
-    """Window with compact expandable audio setup categories."""
+class AudioProductionPanel(ctk.CTkFrame):
+    """Side panel with compact audio setup categories."""
 
-    def __init__(self, master, colors: dict, base_dir: Path):
-        super().__init__(master)
+    def __init__(self, master, colors: dict, base_dir: Path, on_close: callable, **kwargs):
+        super().__init__(master, **kwargs)
         self.colors = colors
         self.base_dir = base_dir
+        self.on_close = on_close
         self._waveform: Optional[WaveformWidget] = None
 
-        self.title("Audio Production Studio")
-        self.geometry("700x530")
-        self.transient(master)
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.bind("<Escape>", lambda _e: self._on_close())
-
-        self.update_idletasks()
-        self.deiconify()
-        self.lift()
-        self.focus_force()
-        x = (self.winfo_screenwidth() // 2) - (700 // 2)
-        y = (self.winfo_screenheight() // 2) - (530 // 2)
-        self.geometry(f"700x530+{x}+{y}")
-
-        self.row_widgets = []
-        self.expanded_row = None
+        self.configure(
+            fg_color=self.colors["card_bg"],
+            border_width=2,
+            border_color=self.colors["border"],
+            corner_radius=0
+        )
 
         self.setup_ui()
 
-    def _on_close(self):
+    def _on_close_internal(self):
         if self._waveform:
             self._waveform.stop()
-        self.destroy()
+        self.on_close()
 
     def setup_ui(self):
         # ── Header ────────────────────────────────────────────────────────
-        header_bg = ctk.CTkFrame(
-            self,
-            fg_color=self.colors["card_bg"],
-            corner_radius=0,
-        )
-        header_bg.pack(fill="x")
-
-        header_frame = ctk.CTkFrame(header_bg, fg_color="transparent")
-        header_frame.pack(fill="x", padx=20, pady=12)
+        header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        header_frame.pack(fill="x", padx=15, pady=(15, 10))
 
         # Ikona + tytuł
         title_icon = ctk.CTkLabel(
             header_frame,
             text="♬",
-            font=ctk.CTkFont(size=28),
+            font=ctk.CTkFont(size=24),
             text_color=self.colors["accent"],
         )
         title_icon.pack(side="left")
 
         title_label = ctk.CTkLabel(
             header_frame,
-            text="  Audio Production Studio",
-            font=ctk.CTkFont(size=22, weight="bold"),
+            text=" Audio Production",
+            font=ctk.CTkFont(size=18, weight="bold"),
             text_color=self.colors["accent"],
         )
         title_label.pack(side="left")
 
-        subtitle = ctk.CTkLabel(
-            header_frame,
-            text="hover for details",
-            font=ctk.CTkFont(size=10),
-            text_color=self.colors["fg_secondary"],
-        )
-        subtitle.pack(side="left", padx=(12, 0))
-
-        # Waveform po prawej stronie headera
+        # Waveform w headerze
         waveform_container = ctk.CTkFrame(
-            header_frame,
+            self,
             fg_color=self.colors["bg"],
             corner_radius=6,
             border_width=1,
             border_color=self.colors["border"],
         )
-        waveform_container.pack(side="right")
+        waveform_container.pack(fill="x", padx=15, pady=(0, 10))
 
         self._waveform = WaveformWidget(
             waveform_container,
             self.colors,
-            width=180,
-            height=32,
-            n_bars=16,
+            width=330,
+            height=30,
+            n_bars=24,
         )
         self._waveform.pack(padx=4, pady=4)
 
         # ── Info box ───────────────────────────────────────────────────────
-        info_frame = ctk.CTkFrame(self, fg_color=self.colors["card_bg"], corner_radius=0)
-        info_frame.pack(fill="x")
+        info_frame = ctk.CTkFrame(self, fg_color="transparent")
+        info_frame.pack(fill="x", padx=15)
 
-        info_text = (
-            "♩  Install in order:  1) Realtime  →  2) Kernel / Sysctl / Governor  "
-            "→  3) PipeWire  →  4) Packages  →  5) Wine (optional)  →  6) rtcqs (audit)"
-        )
+        info_text = "Install in order: Realtime → Kernel/Sysctl → PipeWire → Packages"
         ctk.CTkLabel(
             info_frame,
             text=info_text,
             font=ctk.CTkFont(size=10),
             text_color=self.colors["fg_secondary"],
-            wraplength=660,
-            justify="left",
-        ).pack(padx=16, pady=8)
-
-        # Separator
-        sep = ctk.CTkFrame(self, fg_color=self.colors["border"], height=1, corner_radius=0)
-        sep.pack(fill="x")
+            wraplength=350,
+            justify="center",
+        ).pack(pady=5)
 
         # ── Scrollable lista kategorii ─────────────────────────────────────
+        # Używamy scrollable frame na wypadek mniejszych ekranów, ale staramy się, by wszystko weszło
         scroll_frame = ctk.CTkScrollableFrame(
             self,
             fg_color="transparent",
             corner_radius=0,
+            scrollbar_button_color=self.colors["border"],
+            scrollbar_button_hover_color=self.colors["accent"],
         )
-        scroll_frame.pack(fill="both", expand=True, padx=15, pady=(10, 0))
+        scroll_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
         self.categories = [
             ("full-setup", "Complete Setup",    True),
@@ -709,75 +681,59 @@ class AudioProductionWindow(ctk.CTkToplevel):
         ]
 
         self.button_items = []
-        for i in range(0, len(self.categories), 2):
-            self._create_row(scroll_frame, i)
+        for i, (cat_id, cat_name, enabled) in enumerate(self.categories):
+            item = self._create_compact_item(scroll_frame, cat_id, cat_name, enabled)
+            self.button_items.append(item)
 
         # ── Panel opisu (na dole) ──────────────────────────────────────────
         self.desc_panel = ctk.CTkFrame(
             self,
-            fg_color=self.colors["card_bg"],
+            fg_color=self.colors["bg"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"]
         )
-        self.desc_panel.pack(fill="x", padx=15, pady=(6, 6))
+        self.desc_panel.pack(fill="x", padx=15, pady=(5, 10))
         self.desc_panel.pack_propagate(False)
-        self.desc_panel.configure(height=62)
+        self.desc_panel.configure(height=80)
 
         self.desc_label = ctk.CTkLabel(
             self.desc_panel,
-            text="♪  Hover over a button to see description",
+            text="♪  Hover for description",
             font=ctk.CTkFont(size=11),
             text_color=self.colors["fg_secondary"],
-            wraplength=650,
+            wraplength=340,
             justify="left",
         )
-        self.desc_label.pack(padx=15, pady=10)
+        self.desc_label.pack(padx=10, pady=10)
 
         # ── Przycisk zamknięcia ────────────────────────────────────────────
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(0, 12))
-
         ctk.CTkButton(
-            btn_frame,
-            text="✕  Close",
-            command=self._on_close,
+            self,
+            text="✕  Close Side Menu",
+            command=self._on_close_internal,
             font=ctk.CTkFont(size=12),
             fg_color=self.colors["muted"],
             hover_color=self.colors["border"],
-            width=110,
-            height=32,
-        ).pack(side="right")
+            height=35,
+        ).pack(fill="x", padx=15, pady=(0, 15))
 
-    def _create_row(self, master, start_idx):
-        row_frame = ctk.CTkFrame(master, fg_color="transparent")
-        row_frame.pack(fill="x", pady=3)
-
-        for i in range(2):
-            idx = start_idx + i
-            if idx < len(self.categories):
-                cat_id, cat_name, enabled = self.categories[idx]
-                item = self._create_compact_item(row_frame, cat_id, cat_name, enabled, idx)
-                self.button_items.append(item)
-            else:
-                placeholder = ctk.CTkFrame(row_frame, fg_color="transparent", width=315, height=48)
-                placeholder.pack(side="left", padx=5)
-
-    def _create_compact_item(self, master, cat_id: str, cat_name: str, enabled: bool, idx: int):
+    def _create_compact_item(self, master, cat_id: str, cat_name: str, enabled: bool):
         script_path = self.base_dir / "audio" / cat_id / "install.sh"
         module = ScriptModule(cat_name, script_path, "", enabled=enabled and script_path.exists())
 
         container = ctk.CTkFrame(
             master,
-            fg_color=self.colors["card_bg"],
+            fg_color=self.colors["bg"],
             corner_radius=8,
-            width=315,
-            height=48,
+            height=44,
         )
-        container.pack(side="left", padx=5)
+        container.pack(fill="x", pady=2, padx=10)
         container.pack_propagate(False)
         container.configure(border_width=1, border_color=self.colors["border"])
 
         btn_frame = ctk.CTkFrame(container, fg_color="transparent")
-        btn_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.92, relheight=0.80)
+        btn_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.92, relheight=0.85)
 
         # Status dot
         status_color = self.colors["success"] if (enabled and script_path.exists()) else self.colors["muted"]
@@ -794,10 +750,10 @@ class AudioProductionWindow(ctk.CTkToplevel):
         name_label = ctk.CTkLabel(
             btn_frame,
             text=f"  {icon}  {cat_name}",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=12, weight="bold"),
             text_color=self.colors["accent"],
         )
-        name_label.place(relx=0.06, rely=0.5, anchor="w")
+        name_label.place(relx=0.08, rely=0.5, anchor="w")
 
         # Przycisk Run
         run_btn = ctk.CTkButton(
@@ -809,33 +765,37 @@ class AudioProductionWindow(ctk.CTkToplevel):
             hover_color=self.colors["accent"],
             text_color="#000000",
             corner_radius=5,
-            width=58,
-            height=26,
+            width=50,
+            height=24,
             state="normal" if (enabled and script_path.exists()) else "disabled",
         )
-        run_btn.place(relx=0.98, rely=0.5, anchor="e")
+        run_btn.place(relx=1.0, rely=0.5, anchor="e")
 
-        cat_id_real = self.categories[idx][0]
-        desc = AUDIO_CATEGORY_DESCRIPTIONS.get(cat_id_real, "")
+        desc = AUDIO_CATEGORY_DESCRIPTIONS.get(cat_id, "")
 
         item_data = {
             "container": container,
             "run_btn":   run_btn,
             "name_label": name_label,
-            "cat_id":    cat_id_real,
+            "cat_id":    cat_id,
             "cat_name":  cat_name,
             "description": desc,
         }
 
         def on_enter(e, it=item_data):
-            if getattr(self, "_current_hover", None) != it:
-                self._current_hover = it
-                self._on_button_enter(it)
+            it["container"].configure(border_color=self.colors["accent"], border_width=2)
+            icon_c = AUDIO_CATEGORY_ICONS.get(it["cat_id"], "♪")
+            self.desc_label.configure(
+                text=f"{icon_c} {it['cat_name']}: {it['description']}",
+                text_color=self.colors["fg"],
+            )
 
         def on_leave(e, it=item_data):
-            if getattr(self, "_current_hover", None) == it:
-                self._current_hover = None
-                self._on_button_leave(it)
+            it["container"].configure(border_color=self.colors["border"], border_width=1)
+            self.desc_label.configure(
+                text="♪  Hover for description",
+                text_color=self.colors["fg_secondary"],
+            )
 
         for widget in [container, btn_frame, status_dot, name_label, run_btn]:
             widget.bind("<Enter>", on_enter)
@@ -843,48 +803,24 @@ class AudioProductionWindow(ctk.CTkToplevel):
 
         return item_data
 
-    def _on_button_enter(self, item_data):
-        item_data["container"].configure(border_color=self.colors["accent"], border_width=2)
-        icon = AUDIO_CATEGORY_ICONS.get(item_data["cat_id"], "♪")
-        self.desc_label.configure(
-            text=f"{icon}  {item_data['cat_name']}: {item_data['description']}",
-            text_color=self.colors["fg"],
-        )
-
-    def _on_button_leave(self, item_data):
-        item_data["container"].configure(border_color=self.colors["border"], border_width=1)
-        self.desc_label.configure(
-            text="♪  Hover over a button to see description",
-            text_color=self.colors["fg_secondary"],
-        )
-
     def _run_category_script(self, module: ScriptModule):
         try:
             dialog = ctk.CTkToplevel(self)
-            dialog.title("Confirm Execution")
-            dialog.geometry("400x180")
-            dialog.transient(self)
+            dialog.title("Confirm")
+            dialog.geometry("350x160")
+            dialog.transient(self.master)
             dialog.bind("<Escape>", lambda _e: dialog.destroy())
 
             dialog.update_idletasks()
-            dialog.deiconify()
-            dialog.lift()
-            x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-            y = (dialog.winfo_screenheight() // 2) - (180 // 2)
-            dialog.geometry(f"400x180+{x}+{y}")
+            x = (dialog.winfo_screenwidth() // 2) - (350 // 2)
+            y = (dialog.winfo_screenheight() // 2) - (160 // 2)
+            dialog.geometry(f"+{x}+{y}")
 
             ctk.CTkLabel(
                 dialog,
                 text=f"Run {module.name}?",
-                font=ctk.CTkFont(size=16, weight="bold"),
+                font=ctk.CTkFont(size=14, weight="bold"),
             ).pack(pady=(20, 10))
-
-            ctk.CTkLabel(
-                dialog,
-                text="Execute setup script in terminal?",
-                font=ctk.CTkFont(size=11),
-                text_color="gray",
-            ).pack(pady=(0, 20))
 
             button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
             button_frame.pack(pady=10)
@@ -894,30 +830,29 @@ class AudioProductionWindow(ctk.CTkToplevel):
                 try:
                     module.run()
                 except Exception as e:
-                    _log_exception("Failed to launch script terminal", e)
+                    _log_exception("Failed to launch script", e)
 
-            ctk.CTkButton(
-                button_frame,
-                text="Execute",
-                command=confirm,
-                fg_color=self.colors["success"],
-                hover_color=self.colors["success_hover"],
-                width=100,
-                height=30,
-            ).pack(side="left", padx=5)
-
-            ctk.CTkButton(
-                button_frame,
-                text="Cancel",
-                command=dialog.destroy,
-                fg_color="gray40",
-                hover_color="gray30",
-                width=100,
-                height=30,
-            ).pack(side="left", padx=5)
-
+            ctk.CTkButton(button_frame, text="Execute", command=confirm,
+                          fg_color=self.colors["success"], width=90).pack(side="left", padx=5)
+            ctk.CTkButton(button_frame, text="Cancel", command=dialog.destroy,
+                          fg_color="gray40", width=90).pack(side="left", padx=5)
         except Exception as e:
-            _log_exception("Failed to show category confirm dialog", e)
+            _log_exception("Failed to show confirm dialog", e)
+
+    def update_colors(self, colors: dict):
+        self.colors = colors
+        self.configure(fg_color=colors["card_bg"], border_color=colors["border"])
+        if self._waveform:
+            self._waveform.update_colors(colors)
+        
+        self.desc_panel.configure(fg_color=colors["bg"], border_color=colors["border"])
+        self.desc_label.configure(text_color=colors["fg_secondary"])
+
+        for item in self.button_items:
+            item["container"].configure(fg_color=colors["bg"], border_color=colors["border"])
+            item["name_label"].configure(text_color=colors["accent"])
+            item["run_btn"].configure(fg_color=colors["accent"])
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1056,24 +991,39 @@ class BashiumApp:
 
     def setup_window(self):
         self.root.title("BASHIUM-AUDIO — System Tweaker & Audio Setup")
-        self.root.geometry("1000x720")
-        self.root.minsize(900, 620)
+        self.root.geometry("1300x740")
+        self.root.minsize(1000, 700)
 
         self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth()  // 2) - (1000 // 2)
-        y = (self.root.winfo_screenheight() // 2) - (720 // 2)
-        self.root.geometry(f"1000x720+{x}+{y}")
+        x = (self.root.winfo_screenwidth()  // 2) - (1300 // 2)
+        y = (self.root.winfo_screenheight() // 2) - (740 // 2)
+        self.root.geometry(f"1300x740+{x}+{y}")
 
     def setup_ui(self):
         colors = self._get_current_colors()
 
+        # ── Master container for Side Panel layout ────────────────────────
+        self.master_container = ctk.CTkFrame(self.root, fg_color="transparent")
+        self.master_container.pack(fill="both", expand=True)
+
+        # ── Side Panel (Audio Production) ─────────────────────────────────
+        self.side_panel_visible = False
+        self.side_panel = AudioProductionPanel(
+            self.master_container,
+            colors,
+            Path(__file__).parent.resolve(),
+            on_close=self._toggle_side_panel,
+            width=400
+        )
+        # Początkowo panel boczny jest ukryty (nie spakowany)
+
         # ── Main container ────────────────────────────────────────────────
-        main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        main_frame = ctk.CTkFrame(self.master_container, fg_color="transparent")
+        main_frame.pack(side="left", fill="both", expand=True, padx=(20, 10), pady=10)
 
         # ── Header ────────────────────────────────────────────────────────
         header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        header_frame.pack(fill="x", pady=(0, 16))
+        header_frame.pack(fill="x", pady=(0, 10))
 
         # Title block: BASHIUM-AUDIO on top, subtitle below
         title_block = ctk.CTkFrame(header_frame, fg_color="transparent")
@@ -1082,14 +1032,14 @@ class BashiumApp:
         self.title_label = ctk.CTkLabel(
             title_block,
             text="⚡ BASHIUM-AUDIO",
-            font=ctk.CTkFont(size=32, weight="bold"),
+            font=ctk.CTkFont(size=28, weight="bold"),
         )
         self.title_label.pack(anchor="w")
 
         self.subtitle_label = ctk.CTkLabel(
             title_block,
             text="System Tweaker  ❖  Audio Setup",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=11),
         )
         self.subtitle_label.pack(anchor="w")
 
@@ -1106,9 +1056,9 @@ class BashiumApp:
         self.waveform = WaveformWidget(
             eq_container,
             colors,
-            width=210,
-            height=38,
-            n_bars=20,
+            width=180,
+            height=34,
+            n_bars=18,
         )
         self.waveform.pack(padx=5, pady=5)
 
@@ -1126,17 +1076,17 @@ class BashiumApp:
 
         # ── Hardware info panel ───────────────────────────────────────────
         self.hw_panel = ctk.CTkFrame(main_frame, corner_radius=12)
-        self.hw_panel.pack(fill="x", pady=(0, 16))
+        self.hw_panel.pack(fill="x", pady=(0, 10))
 
         self.hw_title = ctk.CTkLabel(
             self.hw_panel,
             text="🖥  Hardware Detection",
-            font=ctk.CTkFont(size=16, weight="bold"),
+            font=ctk.CTkFont(size=14, weight="bold"),
         )
-        self.hw_title.pack(anchor="w", padx=20, pady=(15, 10))
+        self.hw_title.pack(anchor="w", padx=20, pady=(10, 5))
 
         info_grid = ctk.CTkFrame(self.hw_panel, fg_color="transparent")
-        info_grid.pack(fill="x", padx=20, pady=(0, 15))
+        info_grid.pack(fill="x", padx=20, pady=(0, 10))
 
         hw_items = [
             ("Wi-Fi",      self.hw_info.get("wifi_text",    "Unknown")),
@@ -1151,7 +1101,7 @@ class BashiumApp:
             row = i // 2
             col = i % 2
             item_frame = ctk.CTkFrame(info_grid, fg_color="transparent")
-            item_frame.grid(row=row, column=col, sticky="w", padx=15, pady=5)
+            item_frame.grid(row=row, column=col, sticky="w", padx=15, pady=2)
 
             label_widget = ctk.CTkLabel(
                 item_frame,
@@ -1174,16 +1124,16 @@ class BashiumApp:
             fg_color=self._get_current_colors()["card_bg"],
             corner_radius=12,
         )
-        audio_frame.pack(fill="x", pady=(0, 16))
+        audio_frame.pack(fill="x", pady=(0, 10))
 
         audio_content = ctk.CTkFrame(audio_frame, fg_color="transparent")
-        audio_content.pack(fill="x", padx=20, pady=14)
+        audio_content.pack(fill="x", padx=20, pady=8)
 
         # Duże ikony muzyczne po lewej
         icons_label = ctk.CTkLabel(
             audio_content,
             text="♬",
-            font=ctk.CTkFont(size=40),
+            font=ctk.CTkFont(size=36),
         )
         icons_label.pack(side="left")
 
@@ -1213,21 +1163,21 @@ class BashiumApp:
             font=ctk.CTkFont(size=11),
             text_color=self._get_current_colors()["muted"],
         )
-        wave_label.pack(anchor="w", pady=(2, 0))
+        wave_label.pack(anchor="w", pady=(0, 0))
         self.audio_wave_label = wave_label
 
         # Przycisk Open Setup
         self.audio_btn = ctk.CTkButton(
             audio_content,
-            text="Open Setup",
-            command=self._open_audio_window,
+            text="Open Setup  ❯",
+            command=self._toggle_side_panel,
             font=ctk.CTkFont(size=13, weight="bold"),
             fg_color=self._get_current_colors()["accent"],
             hover_color=self._get_current_colors()["accent_hover"],
             text_color="#000000",
             corner_radius=8,
-            width=140,
-            height=42,
+            width=150,
+            height=38,
         )
         self.audio_btn.pack(side="right")
 
@@ -1260,23 +1210,20 @@ class BashiumApp:
         self.audio_title = audio_title
         self.audio_desc  = audio_desc
 
-        # ── Scrollable frame z kartami modułów ───────────────────────────
-        scroll_frame = ctk.CTkScrollableFrame(
-            main_frame,
-            fg_color="transparent",
-            corner_radius=0,
-        )
-        scroll_frame.pack(fill="both", expand=True)
+        # ── Grid z kartami modułów ───────────────────────────────────────
+        # Używamy zwykłego Frame zamiast Scrollable, aby wymusić widoczność wszystkich kart
+        cards_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        cards_frame.pack(fill="both", expand=True)
 
         for idx, module in enumerate(self.modules):
             row = idx // 2
             col = idx % 2
-            card = ModuleCard(scroll_frame, module, self._get_current_colors())
-            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+            card = ModuleCard(cards_frame, module, self._get_current_colors())
+            card.grid(row=row, column=col, padx=10, pady=5, sticky="nsew")
             self.module_cards.append(card)
 
-        scroll_frame.grid_columnconfigure(0, weight=1)
-        scroll_frame.grid_columnconfigure(1, weight=1)
+        cards_frame.grid_columnconfigure(0, weight=1)
+        cards_frame.grid_columnconfigure(1, weight=1)
 
     # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -1324,6 +1271,10 @@ class BashiumApp:
                 hover_color=colors["accent_hover"],
             )
 
+        # Side panel
+        if hasattr(self, "side_panel") and self.side_panel:
+            self.side_panel.update_colors(colors)
+
         # Karty modułów
         for card in self.module_cards:
             card.colors = colors
@@ -1370,16 +1321,16 @@ class BashiumApp:
         except Exception:
             pass
 
-    def _open_audio_window(self):
-        try:
-            base_dir = Path(__file__).parent.resolve()
-            AudioProductionWindow(
-                self.root,
-                self._get_current_colors(),
-                base_dir,
-            )
-        except Exception as e:
-            _log_exception("Failed to open audio production window", e)
+    def _toggle_side_panel(self):
+        if self.side_panel_visible:
+            self.side_panel.pack_forget()
+            self.audio_btn.configure(text="Open Setup  ❯")
+            self.audio_frame.configure(border_width=0)
+        else:
+            self.side_panel.pack(side="right", fill="y")
+            self.audio_btn.configure(text="Close Setup  ❮")
+            self.audio_frame.configure(border_width=2, border_color=self._get_current_colors()["accent"])
+        self.side_panel_visible = not self.side_panel_visible
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -124,9 +124,9 @@ has_nvidia_gpu(){
 has_wifi(){
     local hw
     hw=$( (command -v lspci >/dev/null 2>&1 && lspci -nn) 2>/dev/null; (command -v lsusb >/dev/null 2>&1 && lsusb) 2>/dev/null )
-    # Look for wireless devices but exclude Ethernet/wired controllers
-    echo "$hw" | grep -Eqi 'Network controller.*Wireless|Network controller.*802\.11|Wireless|Wi-Fi|802\.11' && \
-        ! echo "$hw" | grep -Eqi 'Ethernet|Gigabit|10-Gigabit|1000Base'
+    # Look for wireless devices. We don't exclude Ethernet here because 
+    # many devices (especially laptops) have both, and we want to detect Wi-Fi if it's there.
+    echo "$hw" | grep -Eqi 'Network controller.*Wireless|Network controller.*802\.11|Wireless|Wi-Fi|WiFi|802\.11'
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
